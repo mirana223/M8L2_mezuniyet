@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinguaVox — Telaffuz Antrenörü</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --border: #1e1e2e;
+    --accent: #e8ff47; --accent2: #ff6b35; --accent3: #6be5ff;
+    --text: #e8e8f0; --muted: #5a5a70;
+    --success: #4eff91; --danger: #ff4e6a;
+    --glow: 0 0 30px rgba(232, 255, 71, 0.15);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh; overflow-x: hidden; cursor: none;
+  }
+  .cursor {
+    width: 12px; height: 12px; background: var(--accent);
+    border-radius: 50%; position: fixed; top: 0; left: 0;
+    pointer-events: none; z-index: 9999;
+    transition: transform 0.15s ease; mix-blend-mode: difference;
+  }
+  .cursor-ring {
+    width: 36px; height: 36px; border: 1px solid var(--accent);
+    border-radius: 50%; position: fixed; top: 0; left: 0;
+    pointer-events: none; z-index: 9998; opacity: 0.4;
+    transition: all 0.1s ease;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(232,255,71,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(232,255,71,0.02) 1px, transparent 1px);
+    background-size: 60px 60px; pointer-events: none; z-index: 0;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 1; }
+  header {
+    padding: 2.5rem 0 2rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem;
+  }
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    letter-spacing: 0.05em; line-height: 0.9;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .logo-sub { font-size: 0.65rem; letter-spacing: 0.25em; color: var(--muted); text-transform: uppercase; margin-top: 0.5rem; }
+  .score-panel { text-align: right; flex-shrink: 0; }
+  .score-label { font-size: 0.6rem; letter-spacing: 0.3em; color: var(--muted); text-transform: uppercase; margin-bottom: 0.3rem; }
+  .score-value {
+    font-family: 'Bebas Neue', sans-serif; font-size: 3.5rem;
+    color: var(--accent); line-height: 1;
+    filter: drop-shadow(0 0 20px rgba(232, 255, 71, 0.4));
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .score-value.bump { transform: scale(1.3); filter: drop-shadow(0 0 40px rgba(232, 255, 71, 0.8)); }
+  main { padding: 3rem 0 6rem; }
+  .screen { display: none; animation: fadeUp 0.5s ease forwards; }
+  .screen.active { display: block; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .section-title { font-family: 'DM Serif Display', serif; font-style: italic; font-size: clamp(1.8rem, 4vw, 3rem); color: var(--text); margin-bottom: 0.5rem; }
+  .section-hint { font-size: 0.7rem; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; margin-bottom: 3rem; }
+  .difficulty-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 4rem; }
+  @media (max-width: 600px) { .difficulty-grid { grid-template-columns: 1fr; } }
+  .diff-card {
+    border: 1px solid var(--border); padding: 2.5rem 2rem;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: all 0.3s ease; background: var(--surface);
+  }
+  .diff-card::before {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+    height: 3px; transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease;
+  }
+  .diff-card.kolay::before { background: var(--success); }
+  .diff-card.orta::before  { background: var(--accent); }
+  .diff-card.zor::before   { background: var(--danger); }
+  .diff-card:hover { border-color: var(--muted); transform: translateY(-4px); }
+  .diff-card:hover::before { transform: scaleX(1); }
+  .diff-card.selected { border-color: var(--accent); box-shadow: var(--glow); }
+  .diff-card.selected::before { transform: scaleX(1); }
+  .diff-number { font-family: 'Bebas Neue', sans-serif; font-size: 5rem; line-height: 1; opacity: 0.06; position: absolute; top: -0.5rem; right: 1rem; color: var(--text); }
+  .diff-name { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 0.1em; margin-bottom: 0.8rem; }
+  .diff-card.kolay .diff-name { color: var(--success); }
+  .diff-card.orta  .diff-name { color: var(--accent); }
+  .diff-card.zor   .diff-name { color: var(--danger); }
+  .diff-desc { font-size: 0.65rem; letter-spacing: 0.1em; color: var(--muted); line-height: 1.8; }
+  .diff-count { margin-top: 1.5rem; font-size: 0.6rem; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; }
+  .lang-section { margin-bottom: 3rem; }
+  .lang-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
+  .lang-pill {
+    padding: 0.5rem 1.2rem; border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem; letter-spacing: 0.15em; cursor: pointer;
+    transition: all 0.2s ease; text-transform: uppercase;
+  }
+  .lang-pill:hover { border-color: var(--muted); color: var(--text); }
+  .lang-pill.active { border-color: var(--accent3); color: var(--accent3); background: rgba(107, 229, 255, 0.05); box-shadow: 0 0 15px rgba(107, 229, 255, 0.1); }
+  .btn { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.2em; padding: 1.1rem 3rem; border: none; cursor: pointer; transition: all 0.25s ease; text-transform: uppercase; position: relative; overflow: hidden; }
+  .btn-primary { background: var(--accent); color: #0a0a0f; }
+  .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(232, 255, 71, 0.3); }
+  .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none !important; }
+  .quiz-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4rem; gap: 2rem; }
+  .quiz-meta { font-size: 0.65rem; letter-spacing: 0.25em; color: var(--muted); text-transform: uppercase; }
+  .progress-bar { flex: 1; height: 2px; background: var(--border); position: relative; max-width: 300px; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width 0.5s ease; box-shadow: 0 0 8px var(--accent); }
+  .word-card { border: 1px solid var(--border); padding: 4rem 3rem; background: var(--surface); position: relative; overflow: hidden; margin-bottom: 3rem; }
+  .word-card::after { content: ''; position: absolute; top: -50%; right: -20%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(232,255,71,0.03) 0%, transparent 70%); pointer-events: none; }
+  .word-prompt { font-size: 0.6rem; letter-spacing: 0.3em; color: var(--muted); text-transform: uppercase; margin-bottom: 1.5rem; }
+  .word-display { font-family: 'DM Serif Display', serif; font-size: clamp(3rem, 8vw, 6rem); line-height: 1; margin-bottom: 1rem; transition: all 0.4s ease; }
+  .word-phonetic { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.15em; margin-bottom: 0.5rem; }
+  .word-lang-badge { display: inline-block; padding: 0.3rem 0.8rem; background: rgba(107, 229, 255, 0.08); border: 1px solid rgba(107, 229, 255, 0.2); color: var(--accent3); font-size: 0.6rem; letter-spacing: 0.25em; text-transform: uppercase; }
+  .diff-badge { position: absolute; top: 2rem; right: 2rem; font-size: 0.55rem; letter-spacing: 0.3em; text-transform: uppercase; padding: 0.3rem 0.8rem; border: 1px solid; }
+  .diff-badge.kolay { color: var(--success); border-color: rgba(78, 255, 145, 0.3); }
+  .diff-badge.orta   { color: var(--accent);  border-color: rgba(232, 255, 71, 0.3); }
+  .diff-badge.zor    { color: var(--danger);  border-color: rgba(255, 78, 106, 0.3); }
+  .mic-section { display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .mic-btn { width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--accent); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; flex-shrink: 0; }
+  .mic-btn:hover { background: rgba(232,255,71,0.08); }
+  .mic-btn.recording { border-color: var(--danger); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,78,106,0.4); } 50% { box-shadow: 0 0 0 15px rgba(255,78,106,0); } }
+  .mic-icon { font-size: 2rem; line-height: 1; }
+  .mic-info { flex: 1; min-width: 200px; }
+  .mic-status { font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 0.5rem; transition: color 0.3s; }
+  .mic-status.idle      { color: var(--muted); }
+  .mic-status.listening { color: var(--danger); }
+  .mic-status.done      { color: var(--success); }
+  .visualizer { height: 40px; display: flex; align-items: center; gap: 3px; }
+  .viz-bar { width: 4px; background: var(--border); border-radius: 2px; transition: height 0.1s ease, background 0.3s ease; min-height: 4px; }
+  .viz-bar.active { background: var(--danger); }
+  .viz-bar.done   { background: var(--muted); }
+  .result-box { padding: 1.5rem 2rem; border: 1px solid var(--border); background: var(--surface); margin-bottom: 2rem; display: none; animation: fadeUp 0.3s ease; }
+  .result-box.correct { border-color: var(--success); background: rgba(78,255,145,0.04); }
+  .result-box.wrong   { border-color: var(--danger);  background: rgba(255,78,106,0.04); }
+  .result-box.show    { display: block; }
+  .result-label { font-size: 0.6rem; letter-spacing: 0.3em; text-transform: uppercase; margin-bottom: 0.5rem; }
+  .result-box.correct .result-label { color: var(--success); }
+  .result-box.wrong   .result-label { color: var(--danger); }
+  .result-heard   { font-family: 'DM Serif Display', serif; font-size: 1.8rem; }
+  .result-correct { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; letter-spacing: 0.1em; }
+  .points-pop { position: fixed; font-family: 'Bebas Neue', sans-serif; font-size: 4rem; color: var(--accent); pointer-events: none; z-index: 1000; animation: pointsFly 1.2s ease-out forwards; text-shadow: 0 0 30px var(--accent); }
+  @keyframes pointsFly { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(0.6); } }
+  .summary-box { border: 1px solid var(--border); padding: 4rem 3rem; background: var(--surface); text-align: center; position: relative; overflow: hidden; margin-bottom: 3rem; }
+  .summary-box::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(232,255,71,0.06) 0%, transparent 60%); pointer-events: none; }
+  .summary-score-label { font-size: 0.6rem; letter-spacing: 0.35em; color: var(--muted); text-transform: uppercase; margin-bottom: 1rem; }
+  .summary-score { font-family: 'Bebas Neue', sans-serif; font-size: clamp(6rem, 15vw, 10rem); color: var(--accent); line-height: 1; filter: drop-shadow(0 0 40px rgba(232,255,71,0.4)); }
+  .summary-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); margin-top: 3rem; }
+  .stat-cell { background: var(--surface); padding: 1.5rem; text-align: center; }
+  .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; line-height: 1; margin-bottom: 0.3rem; }
+  .stat-num.green  { color: var(--success); }
+  .stat-num.red    { color: var(--danger); }
+  .stat-num.yellow { color: var(--accent); }
+  .stat-label { font-size: 0.55rem; letter-spacing: 0.25em; color: var(--muted); text-transform: uppercase; }
+  .summary-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 0.8rem 2rem; display: flex; align-items: center; gap: 2rem; z-index: 10; }
+  .footer-item { font-size: 0.55rem; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; }
+  .footer-item span { color: var(--accent3); margin-left: 0.5rem; }
+  .toast { position: fixed; bottom: 4rem; right: 2rem; padding: 1rem 1.5rem; background: var(--surface); border: 1px solid var(--border); font-size: 0.7rem; letter-spacing: 0.1em; z-index: 100; transform: translateX(200%); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); max-width: 280px; }
+  .toast.show { transform: translateX(0); }
+</style>
+</head>
+<body>
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<div class="container">
+  <header>
+    <div>
+      <div class="logo">LinguaVox</div>
+      <div class="logo-sub">Telaffuz Antrenörü v2.0</div>
+    </div>
+    <div class="score-panel">
+      <div class="score-label">Puan</div>
+      <div class="score-value" id="scoreDisplay">000</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ─── EKRAN 1: Kurulum ─────────────────────────────────────────── -->
+    <div class="screen active" id="setupScreen">
+      <h1 class="section-title">Zorluk Seçin</h1>
+      <p class="section-hint">Kelime havuzu · 10 kelime / seviye</p>
+
+      <div class="difficulty-grid">
+        <div class="diff-card kolay" data-diff="kolay" onclick="selectDifficulty('kolay')">
+          <div class="diff-number">01</div>
+          <div class="diff-name">Kolay</div>
+          <div class="diff-desc">Temel günlük kelimeler.<br>Elma, kedi, su gibi<br>sık kullanılan sözcükler.</div>
+          <div class="diff-count">// 10 kelime</div>
+        </div>
+        <div class="diff-card orta" data-diff="orta" onclick="selectDifficulty('orta')">
+          <div class="diff-number">02</div>
+          <div class="diff-name">Orta</div>
+          <div class="diff-desc">Çok heceli, Türkçe'de<br>sık kullanılan ancak<br>sesletimi dikkat isteyen sözcükler.</div>
+          <div class="diff-count">// 10 kelime</div>
+        </div>
+        <div class="diff-card zor" data-diff="zor" onclick="selectDifficulty('zor')">
+          <div class="diff-number">03</div>
+          <div class="diff-name">Zor</div>
+          <div class="diff-desc">İngilizcede sessiz harf<br>tuzakları olan, yanıltıcı<br>spellingʼli kelimeler.</div>
+          <div class="diff-count">// 10 kelime</div>
+        </div>
+      </div>
+
+      <div class="lang-section">
+        <h2 class="section-title" style="font-size:1.5rem;">Hedef Dil</h2>
+        <p class="section-hint">Tanıma dili — şu an sadece İngilizce destekleniyor</p>
+        <div class="lang-grid" id="langGrid"></div>
+      </div>
+
+      <button class="btn btn-primary" id="startBtn" onclick="startQuiz()" disabled>Başla →</button>
+    </div>
+
+    <!-- ─── EKRAN 2: Quiz ────────────────────────────────────────────── -->
+    <div class="screen" id="quizScreen">
+      <div class="quiz-header">
+        <div class="quiz-meta" id="quizMeta">Soru 1 / 10</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill" style="width:0%"></div>
+        </div>
+        <div class="quiz-meta" id="diffLabel">—</div>
+      </div>
+
+      <div class="word-card">
+        <div class="diff-badge" id="diffBadge"></div>
+        <div class="word-prompt">Bu kelimenin İngilizcesini telaffuz edin:</div>
+        <div class="word-display" id="wordDisplay">—</div>
+        <div class="word-phonetic" id="wordPhonetic"></div>
+        <div class="word-lang-badge" id="wordLangBadge">İngilizce</div>
+      </div>
+
+      <div class="mic-section">
+        <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
+          <span class="mic-icon" id="micIcon">🎤</span>
+        </button>
+        <div class="mic-info">
+          <div class="mic-status idle" id="micStatus">Mikrofona tıklayın</div>
+          <div class="visualizer" id="visualizer"></div>
+        </div>
+      </div>
+
+      <div class="result-box" id="resultBox">
+        <div class="result-label" id="resultLabel"></div>
+        <div class="result-heard" id="resultHeard"></div>
+        <div class="result-correct" id="resultCorrect"></div>
+      </div>
+
+      <!-- Manuel giriş — ses tanıma çalışmadığında yedek -->
+      <div id="manualSection" style="margin-bottom:1.5rem;">
+        <div style="font-size:0.6rem; letter-spacing:0.2em; color:var(--muted); text-transform:uppercase; margin-bottom:0.6rem;">
+          Ses çalışmıyor mu? Elle yaz:
+        </div>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <input
+            id="manualInput"
+            type="text"
+            placeholder="İngilizce söyleyişini yaz..."
+            onkeydown="if(event.key==='Enter') manualSubmit()"
+            style="
+              flex:1; min-width:200px;
+              background:var(--surface); border:1px solid var(--border);
+              color:var(--text); font-family:'JetBrains Mono',monospace;
+              font-size:0.85rem; padding:0.7rem 1rem;
+              outline:none; transition:border-color 0.2s;
+            "
+            onfocus="this.style.borderColor='var(--accent3)'"
+            onblur="this.style.borderColor='var(--border)'"
+          />
+          <button class="btn btn-secondary" onclick="manualSubmit()" style="padding:0.7rem 1.5rem; font-size:1rem;">
+            Gönder
+          </button>
+        </div>
+      </div>
+
+      <!-- Debug log -->
+      <div style="margin-bottom:0.5rem;">
+        <button
+          onclick="var p=document.getElementById('debugPanel'); p.style.display=p.style.display==='none'?'block':'none'"
+          style="background:transparent;border:none;color:var(--muted);font-size:0.6rem;letter-spacing:0.15em;cursor:pointer;font-family:'JetBrains Mono',monospace;"
+        >[ debug logu göster/gizle ]</button>
+      </div>
+      <div id="debugPanel" style="
+        margin-bottom:1.5rem; padding:1rem;
+        background:#0a0a0f; border:1px solid #1e1e2e;
+        font-size:0.6rem; letter-spacing:0.05em; color:var(--muted);
+        max-height:120px; overflow-y:auto; display:none;
+      ">
+        <div style="color:var(--accent3);margin-bottom:0.4rem;letter-spacing:0.2em;font-size:0.55rem;">DEBUG LOG</div>
+        <div id="debugLog"></div>
+      </div>
+
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.5rem;">
+        <button class="btn btn-primary" id="nextBtn" onclick="nextWord()" style="display:none;">Sonraki →</button>
+        <button class="btn btn-secondary" onclick="skipWord()">Geç ↷</button>
+        <button class="btn btn-secondary" onclick="quitQuiz()">✕ Bırak</button>
+      </div>
+    </div>
+
+    <!-- ─── EKRAN 3: Özet ────────────────────────────────────────────── -->
+    <div class="screen" id="summaryScreen">
+      <h1 class="section-title">Sonuçlar</h1>
+      <p class="section-hint" id="summaryMeta">Antrenman tamamlandı</p>
+
+      <div class="summary-box">
+        <div class="summary-score-label">Toplam Puan</div>
+        <div class="summary-score" id="finalScore">0</div>
+        <div class="summary-stats">
+          <div class="stat-cell"><div class="stat-num green" id="statCorrect">0</div><div class="stat-label">Doğru</div></div>
+          <div class="stat-cell"><div class="stat-num red"   id="statWrong">0</div><div class="stat-label">Yanlış</div></div>
+          <div class="stat-cell"><div class="stat-num yellow" id="statSkip">0</div><div class="stat-label">Atlanan</div></div>
+        </div>
+      </div>
+
+      <div id="missedSection" style="margin-bottom:3rem; display:none;">
+        <h2 class="section-title" style="font-size:1.4rem; margin-bottom:0.5rem;">Kaçırılan Kelimeler</h2>
+        <p class="section-hint">Tekrar çalışılması önerilen</p>
+        <div id="missedList" style="display:flex; flex-wrap:wrap; gap:0.75rem;"></div>
+      </div>
+
+      <div class="summary-actions">
+        <button class="btn btn-primary" onclick="restartQuiz()">Tekrar Oyna</button>
+        <button class="btn btn-secondary" onclick="goHome()">Ana Sayfa</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <div class="footer-item">Dil<span id="footerLang">—</span></div>
+  <div class="footer-item">Zorluk<span id="footerDiff">—</span></div>
+  <div class="footer-item">API<span>Web Speech + Flask</span></div>
+  <div class="footer-item" style="margin-left:auto;">LinguaVox © 2025</div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SABITLER ────────────────────────────────────────────────────────────────
+const languageCodes = {
+  'en': 'İngilizce', 'es': 'İspanyolca', 'fr': 'Fransızca',
+  'de': 'Almanca',   'it': 'İtalyanca',  'pt': 'Portekizce',
+  'ru': 'Rusça',     'ja': 'Japonca',    'zh-CN': 'Çince', 'tr': 'Türkçe'
+};
+
+// Web Speech API'nin beklediği dil kodları
+// Şu an kelime listesi sadece İngilizce içerdiği için hepsi en-US dinliyor.
+// İleride çok dilli kelime eklenince buradaki kod devreye girer.
+const speechLangMap = {
+  'en': 'en-US', 'es': 'es-ES', 'fr': 'fr-FR', 'de': 'de-DE',
+  'it': 'it-IT', 'pt': 'pt-PT', 'ru': 'ru-RU', 'ja': 'ja-JP',
+  'zh-CN': 'zh-CN', 'tr': 'tr-TR'
+};
+
+// Zor kelimelerin IPA gösterimi — kullanıcıya ipucu
+const phoneticHints = {
+  'Colonel': '/ˈkɜrnl/',         'Queue': '/kjuː/',
+  'Conscience': '/ˈkɒnʃəns/',    'Choir': '/ˈkwaɪər/',
+  'Thorough': '/ˈθʌrə/',         'Hierarchy': '/ˈhaɪərɑːrki/',
+  'Wednesday': '/ˈwenzdeɪ/',     'Squirrel': '/ˈskwɪrəl/',
+  'Entrepreneur': '/ˌɒntrəprəˈnɜːr/', 'Psychology': '/saɪˈkɒlədʒi/',
+  'Schedule': '/ˈʃedjuːl/',      'Chaos': '/ˈkeɪɒs/'
+};
+
+// ─── DURUM ───────────────────────────────────────────────────────────────────
+let state = {
+  difficulty: null,
+  lang: 'en',
+  queue: [],        // Flask'tan gelen karıştırılmış kelime listesi
+  index: 0,
+  score: 0,
+  correct: 0, wrong: 0, skipped: 0,
+  missed: [],
+  recognition: null,
+  recording: false,
+  answered: false
+};
+
+// ─── BAŞLANGIÇ ───────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  buildLangGrid();
+  buildVisualizer();
+  initCursor();
+});
+
+function buildLangGrid() {
+  const grid = document.getElementById('langGrid');
+  Object.entries(languageCodes).forEach(([code, name]) => {
+    const pill = document.createElement('button');
+    pill.className = 'lang-pill' + (code === 'en' ? ' active' : '');
+    pill.dataset.code = code;
+    pill.textContent = name;
+    pill.onclick = () => selectLang(code);
+    grid.appendChild(pill);
+  });
+}
+
+function buildVisualizer() {
+  const viz = document.getElementById('visualizer');
+  for (let i = 0; i < 20; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'viz-bar';
+    bar.style.height = '4px';
+    viz.appendChild(bar);
+  }
+}
+
+function initCursor() {
+  const cursor = document.getElementById('cursor');
+  const ring   = document.getElementById('cursorRing');
+  let mx = 0, my = 0, rx = 0, ry = 0;
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    cursor.style.left = mx - 6 + 'px';
+    cursor.style.top  = my - 6 + 'px';
+  });
+  (function animRing() {
+    rx += (mx - rx) * 0.15;
+    ry += (my - ry) * 0.15;
+    ring.style.left = rx - 18 + 'px';
+    ring.style.top  = ry - 18 + 'px';
+    requestAnimationFrame(animRing);
+  })();
+}
+
+// ─── KURULUM SEÇİMLERİ ───────────────────────────────────────────────────────
+function selectDifficulty(d) {
+  state.difficulty = d;
+  document.querySelectorAll('.diff-card').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.diff-card[data-diff="${d}"]`).classList.add('selected');
+  checkStartReady();
+}
+
+function selectLang(code) {
+  state.lang = code;
+  document.querySelectorAll('.lang-pill').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.lang-pill[data-code="${code}"]`).classList.add('active');
+  checkStartReady();
+}
+
+function checkStartReady() {
+  document.getElementById('startBtn').disabled = !state.difficulty;
+}
+
+// ─── QUİZ AKIŞI ──────────────────────────────────────────────────────────────
+
+// 1. Başla butonuna basılınca Flask'tan kelime listesi istenir
+//    Eski kodda: random.choice() her soru için ayrı ayrı çağrılıyordu
+//    Yeni kod: tüm liste bir seferde gelir, tarayıcı sırayla gösterir
+async function startQuiz() {
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true;
+  btn.textContent = 'Yükleniyor...';
+
+  try {
+    const yanit = await fetch('/kelime-listesi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zorluk: state.difficulty })
+    });
+    const veri = await yanit.json();
+
+    if (veri.hata) { showToast('❌ ' + veri.hata); return; }
+
+    state.queue   = veri.kelimeler;  // Flask'tan gelen karıştırılmış liste
+    state.index   = 0;
+    state.score   = 0;
+    state.correct = 0; state.wrong = 0; state.skipped = 0;
+    state.missed  = [];
+
+    document.getElementById('footerLang').textContent = languageCodes[state.lang];
+    document.getElementById('footerDiff').textContent = state.difficulty;
+    document.getElementById('diffLabel').textContent  = state.difficulty.toUpperCase();
+    document.getElementById('diffBadge').textContent  = state.difficulty;
+    document.getElementById('diffBadge').className    = 'diff-badge ' + state.difficulty;
+
+    updateScoreDisplay();
+    showScreen('quizScreen');
+    loadWord();
+
+  } catch (e) {
+    showToast('❌ Sunucuya bağlanılamadı.');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Başla →';
+  }
+}
+
+function loadWord() {
+  const word    = state.queue[state.index];
+  state.current = word;
+  state.answered = false;
+
+  document.getElementById('wordDisplay').textContent  = word.tr;
+  document.getElementById('wordDisplay').style.color  = 'var(--text)';
+  document.getElementById('wordPhonetic').textContent = phoneticHints[word.en] || '';
+  document.getElementById('wordLangBadge').textContent = languageCodes[state.lang];
+
+  document.getElementById('quizMeta').textContent =
+    `Soru ${state.index + 1} / ${state.queue.length}`;
+  document.getElementById('progressFill').style.width =
+    `${(state.index / state.queue.length) * 100}%`;
+
+  document.getElementById('resultBox').className = 'result-box';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('manualInput').value = '';
+  // Debug logunu temizle (her kelimede taze başlasın)
+  document.getElementById('debugLog').innerHTML = '';
+  document.getElementById('debugPanel').style.display = 'none';
+  resetMic();
+  debugLog(`📋 Yeni kelime: "${word.tr}" → "${word.en}"`);
+}
+
+// ─── MİKROFON ────────────────────────────────────────────────────────────────
+function toggleRecording() {
+  if (state.answered) return;
+  state.recording ? stopRecording() : startRecording();
+}
+
+function startRecording() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('❌ Tarayıcınız desteklemiyor. Chrome kullanın.');
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recog = new SpeechRecognition();
+
+  // Kelime listesi şu an sadece İngilizce — tanıma dili en-US sabit
+  // Çok dilli destek eklendiğinde: speechLangMap[state.lang]
+  recog.lang             = 'en-US';
+  recog.interimResults   = false;
+  recog.maxAlternatives  = 3;
+
+  recog.onstart = () => {
+    state.recording = true;
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('micIcon').textContent = '⏹';
+    setMicStatus('listening', '🔴 Dinliyor... Konuştuktan sonra dur butonuna basın');
+    animateVisualizer(true);
+    debugLog('🎤 Mikrofon açıldı, dinliyor...');
+  };
+
+  recog.onresult = (e) => {
+    // onresult tetiklendi — bu noktaya geldiyse Web Speech API çalışıyor
+    const transcript = e.results[0][0].transcript.trim();
+    const confidence = Math.round(e.results[0][0].confidence * 100);
+    debugLog(`✅ Tanındı: "${transcript}" (güven: %${confidence})`);
+
+    // Tanınan metni HEMEN ekrana yaz — Flask'tan önce
+    // Bu sayede Flask hata verse bile ne duyulduğu görünür
+    setMicStatus('done', `Duyuldu: "${transcript}"`);
+    processAnswer(transcript);
+  };
+
+  recog.onerror = (e) => {
+    const mesajlar = {
+      'not-allowed':  '❌ Mikrofon izni reddedildi. Tarayıcı adres çubuğundaki kilit ikonuna tıklayıp mikrofona izin verin.',
+      'no-speech':    '🔇 Ses algılanamadı. Daha yüksek sesle ve net konuşun.',
+      'network':      '🌐 Ağ hatası. Web Speech API internet bağlantısı gerektirir (Google sunucularına bağlanır).',
+      'audio-capture':'🎙️ Mikrofon bulunamadı veya başka uygulama kullanıyor.',
+      'aborted':      'ℹ️ Tanıma iptal edildi.',
+    };
+    const msg = mesajlar[e.error] || `Hata: ${e.error}`;
+    debugLog('❌ ' + msg);
+    showToast(msg, 5000);
+    resetMic();
+  };
+
+  recog.onend = () => {
+    // onend her zaman tetiklenir (başarılı veya başarısız)
+    // Eğer onresult tetiklenmediyse burada kullanıcıyı bilgilendir
+    debugLog('🔚 Tanıma oturumu bitti');
+    state.recording = false;
+    animateVisualizer(false);
+    if (!state.answered) {
+      // onresult gelmedi — muhtemelen çok kısa konuşuldu veya ses yoktu
+      setMicStatus('idle', 'Duyulamadı — tekrar deneyin veya elle yazın');
+    }
+  };
+
+  state.recognition = recog;
+  recog.start();
+}
+
+function stopRecording() {
+  if (state.recognition) state.recognition.stop();
+  resetMic();
+}
+
+function resetMic() {
+  state.recording = false;
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micIcon').textContent = '🎤';
+  setMicStatus('idle', 'Mikrofona tıklayın');
+  animateVisualizer(false);
+}
+
+function setMicStatus(cls, txt) {
+  const el = document.getElementById('micStatus');
+  el.className = 'mic-status ' + cls;
+  el.textContent = txt;
+}
+
+let vizInterval = null;
+function animateVisualizer(active) {
+  const bars = document.querySelectorAll('.viz-bar');
+  if (active) {
+    vizInterval = setInterval(() => {
+      bars.forEach(b => {
+        b.style.height = (4 + Math.random() * 36) + 'px';
+        b.className = 'viz-bar active';
+      });
+    }, 80);
+  } else {
+    clearInterval(vizInterval);
+    bars.forEach(b => { b.style.height = '4px'; b.className = 'viz-bar done'; });
+  }
+}
+
+// ─── CEVAP KONTROLÜ ──────────────────────────────────────────────────────────
+// Web Speech API tanıdıktan sonra buraya gelir.
+// Tanınan metin + doğru kelime Flask'a gönderilir.
+// Flask kontrol eder, session puanını günceller, sonucu döner.
+async function processAnswer(heard) {
+  state.answered = true;
+  setMicStatus('done', '✓ Tanındı');
+
+  try {
+    const yanit = await fetch('/kontrol', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tanilan:      heard,
+        dogru_kelime: state.current.en   // doğru cevabı biz gönderiyoruz
+      })
+    });
+    const veri = await yanit.json();
+
+    const isCorrect = veri.sonuc === 'dogru';
+
+    const rb = document.getElementById('resultBox');
+    rb.className = 'result-box show ' + (isCorrect ? 'correct' : 'wrong');
+
+    document.getElementById('resultLabel').textContent =
+      isCorrect ? '✓ Doğru Telaffuz' : '✗ Yanlış Telaffuz';
+    document.getElementById('resultHeard').textContent = '"' + heard + '"';
+    document.getElementById('resultCorrect').textContent =
+      isCorrect ? '' : `Doğru söyleyiş: ${state.current.en}`;
+
+    if (isCorrect) {
+      state.correct++;
+      state.score = veri.puan;   // sunucudan gelen güvenilir puan
+      updateScoreDisplay(true);
+      spawnPoints('+10');
+      document.getElementById('wordDisplay').style.color = 'var(--success)';
+    } else {
+      state.wrong++;
+      state.missed.push(state.current);
+      document.getElementById('wordDisplay').style.color = 'var(--danger)';
+    }
+
+    document.getElementById('nextBtn').style.display = 'inline-block';
+
+  } catch (e) {
+    showToast('❌ Sunucuya bağlanılamadı.');
+    console.error(e);
+  }
+}
+
+function nextWord() {
+  state.index++;
+  if (state.index >= state.queue.length) showSummary();
+  else loadWord();
+}
+
+function skipWord() {
+  if (!state.answered) {
+    state.skipped++;
+    state.missed.push(state.current);
+  }
+  state.index++;
+  if (state.index >= state.queue.length) showSummary();
+  else loadWord();
+}
+
+function quitQuiz() { showSummary(); }
+
+// ─── ÖZET ────────────────────────────────────────────────────────────────────
+// Quiz bitince Flask'taki /ozet endpoint'inden sunucu tarafı puanı çekiyoruz.
+// Bu sayede kullanıcı JS'i manipüle etse bile gerçek puan server'da kalır.
+async function showSummary() {
+  try {
+    const yanit = await fetch('/ozet');
+    const veri  = await yanit.json();
+
+    document.getElementById('finalScore').textContent  = veri.puan;
+    document.getElementById('statCorrect').textContent = veri.dogru;
+    document.getElementById('statWrong').textContent   = veri.yanlis;
+    document.getElementById('statSkip').textContent    = state.skipped;
+    document.getElementById('summaryMeta').textContent =
+      `${veri.zorluk.toUpperCase()} · ${languageCodes[state.lang]} · ${state.index} kelime işlendi`;
+
+  } catch (e) {
+    // Offline fallback: client-side değerleri kullan
+    document.getElementById('finalScore').textContent  = state.score;
+    document.getElementById('statCorrect').textContent = state.correct;
+    document.getElementById('statWrong').textContent   = state.wrong;
+    document.getElementById('statSkip').textContent    = state.skipped;
+  }
+
+  if (state.missed.length > 0) {
+    const ms = document.getElementById('missedSection');
+    const ml = document.getElementById('missedList');
+    ms.style.display = 'block';
+    ml.innerHTML = '';
+    state.missed.forEach(w => {
+      const chip = document.createElement('div');
+      chip.style.cssText = `padding:0.6rem 1.2rem; border:1px solid var(--border); background:var(--surface); font-size:0.7rem; letter-spacing:0.1em; color:var(--muted);`;
+      chip.innerHTML = `<span style="color:var(--text)">${w.tr}</span>
+        <span style="margin:0 0.5rem">→</span>
+        <span style="color:var(--danger)">${w.en}</span>`;
+      ml.appendChild(chip);
+    });
+  } else {
+    document.getElementById('missedSection').style.display = 'none';
+  }
+
+  showScreen('summaryScreen');
+}
+
+function restartQuiz() { showScreen('setupScreen'); }
+
+function goHome() {
+  state.difficulty = null;
+  document.querySelectorAll('.diff-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('startBtn').textContent = 'Başla →';
+  showScreen('setupScreen');
+}
+
+// ─── YARDIMCI FONKSİYONLAR ───────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active');
+    s.style.display = 'none';
+  });
+  const target = document.getElementById(id);
+  target.style.display = 'block';
+  target.classList.add('active');
+  void target.offsetWidth;  // animasyonu sıfırlamak için layout flush
+}
+
+function updateScoreDisplay(bump = false) {
+  const el = document.getElementById('scoreDisplay');
+  el.textContent = String(state.score).padStart(3, '0');
+  if (bump) {
+    el.classList.add('bump');
+    setTimeout(() => el.classList.remove('bump'), 400);
+  }
+}
+
+function spawnPoints(txt) {
+  const el = document.createElement('div');
+  el.className = 'points-pop';
+  el.textContent = txt;
+  el.style.left = (window.innerWidth / 2 - 40) + 'px';
+  el.style.top  = (window.innerHeight * 0.3) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+// ─── DEBUG & MANUEL GİRİŞ ───────────────────────────────────────────────────
+function debugLog(msg) {
+  const log = document.getElementById('debugLog');
+  if (!log) return;
+  const line = document.createElement('div');
+  const time = new Date().toLocaleTimeString('tr-TR', {hour12:false});
+  line.textContent = `[${time}] ${msg}`;
+  line.style.borderBottom = '1px solid #1e1e2e';
+  line.style.paddingBottom = '2px';
+  line.style.marginBottom = '2px';
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+  // Otomatik aç
+  document.getElementById('debugPanel').style.display = 'block';
+}
+
+// Manuel metin gönderme — ses tanıma tamamen çalışmadığında kullanılır
+function manualSubmit() {
+  if (state.answered) return;
+  const input = document.getElementById('manualInput');
+  const val   = input.value.trim();
+  if (!val) { showToast('Bir şeyler yaz.'); return; }
+  debugLog(`⌨️ Manuel giriş: "${val}"`);
+  input.value = '';
+  processAnswer(val);
+}
+
+function showToast(msg, duration = 3500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+</script>
+</body>
+</html>
